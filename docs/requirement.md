@@ -92,6 +92,7 @@ graph TD
 | **LLM** | Ollama, Azure OpenAI API| 自然言語処理と応答生成 |
 | **Vector Store**| ChromaDB (or FAISS) | ドキュメントのベクトル化と類似度検索 |
 | **Container** | Docker, Docker Compose | 開発環境の再現性とデプロイの容易化 |
+| **markitdown** | markdown | 各種ドキュメントをmarkdownへ変換 |
 
 ### 2.3. API設計 (主要エンドポイント)
 
