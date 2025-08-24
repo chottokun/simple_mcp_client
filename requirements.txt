@@ -1,0 +1,24 @@
+# Backend
+fastapi
+uvicorn[standard]
+python-dotenv
+requests
+
+# LangChain & RAG
+langchain
+langchain-community
+chromadb
+fastapi-mcp
+
+# LLM (initially for Ollama)
+langchain-ollama
+
+# Document Loaders
+pypdf
+unstructured
+markdown
+
+# Testing & Linting
+pytest
+ruff
+pytest-mock

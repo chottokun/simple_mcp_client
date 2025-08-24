@@ -1,0 +1,9 @@
+This is a test document for the ingestion tool.
+The intelligent RAG chat system project is designed to help employees find information quickly.
+The system uses FastAPI for the backend, Streamlit for the frontend, and ChromaDB for the vector store.
+The project plan is divided into four phases.
+Phase 1: Foundation and Tool Server.
+Phase 2: LLM Integration and Chat API.
+Phase 3: Frontend Implementation.
+Phase 4: Final Confirmation and Submission.
+This document will be used to test the search functionality.
