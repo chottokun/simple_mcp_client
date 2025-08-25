@@ -54,7 +54,29 @@
     sudo docker compose down
     ```
 
-## 4. APIエンドポイント
+## 4. CLIツール (CLI Tool)
+
+このプロジェクトには、ドキュメントを簡単取り込むためのCLIツールが含まれています。
+
+### セットアップ (Setup)
+
+CLIツールは、バックエンドと同じ依存関係（`markitdown`を含む）を使用します。以下のコマンドで依存関係をインストールしてください。
+
+```bash
+pip install -r requirements.txt
+```
+
+### 使用方法 (Usage)
+
+`ingest`コマンドを使用して、ローカルのファイルをシステムに取り込みます。このツールは、PDF、Word、Markdownなど、さまざまなファイル形式に対応しています。
+
+```bash
+python cli.py ingest /path/to/your/document.pdf
+```
+
+成功すると、サーバーからの成功メッセージが表示されます。
+
+## 5. APIエンドポイント
 
 ### `/api/chat`
 
