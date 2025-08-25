@@ -29,7 +29,9 @@ def get_chroma_collection():
     client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
 
     # Using a local Ollama model for embeddings
-    ollama_embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    embed_model_name = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+    print(f"Using Ollama embedding model: {embed_model_name}")
+    ollama_embeddings = OllamaEmbeddings(model=embed_model_name)
     embedding_function = LangchainEmbeddingFunction(ollama_embeddings)
 
     collection = client.get_or_create_collection(

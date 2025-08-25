@@ -124,7 +124,11 @@ async def create_agent_executor() -> AgentExecutor:
     Thought:{agent_scratchpad}
     """
     prompt = PromptTemplate.from_template(prompt_template)
-    llm = Ollama(model="llama3")
+
+    # Get the model name from environment variable, with a default
+    chat_model_name = os.getenv("OLLAMA_CHAT_MODEL", "llama3")
+    print(f"Using Ollama chat model: {chat_model_name}")
+    llm = Ollama(model=chat_model_name)
 
     # Await the asynchronous get_tools function
     tools = await get_tools()

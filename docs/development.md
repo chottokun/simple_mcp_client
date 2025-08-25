@@ -12,10 +12,21 @@
     -   リポジトリのクローン
 
 2.  **環境変数の設定**:
-    `search_github_repositories`ツールを使用するには、GitHubの個人アクセストークン（PAT）が必要です。プロジェクトのルートに`.env`ファイルを作成し、以下のように記述してください。Docker Composeが自動で読み込みます。
-    ```
+    プロジェクトのルートに`.env`ファイルを作成し、必要な環境変数を設定します。Docker Composeが自動でこのファイルを読み込みます。
+
+    ```dotenv
+    # GitHubリポジトリ検索ツールを使用するための個人アクセストークン
     GITHUB_PAT=your_github_personal_access_token_here
+
+    # Ollamaで使用するモデル名を指定（オプション）
+    # 指定しない場合、デフォルト値が使用されます
+    OLLAMA_CHAT_MODEL=llama3
+    OLLAMA_EMBED_MODEL=nomic-embed-text
     ```
+    -   `GITHUB_PAT`: `search_github_repositories`ツールを使用する場合に必須です。
+    -   `OLLAMA_CHAT_MODEL`: チャット応答を生成するモデルです。デフォルトは`llama3`です。
+    -   `OLLAMA_EMBED_MODEL`: ドキュメントの埋め込みベクトルを生成するモデルです。デフォルトは`nomic-embed-text`です。
+
     *注意: `.env`ファイルは`.gitignore`に含まれており、バージョン管理されません。*
 
 3.  **Ollamaモデルの準備**:

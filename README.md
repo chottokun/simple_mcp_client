@@ -17,8 +17,7 @@
 ### 前提条件
 
 -   [Docker](https://www.docker.com/get-started) と [Docker Compose](https://docs.docker.com/compose/install/)
--   ローカルで実行されている [Ollama](https://ollama.com/) と、必要なモデル (`nomic-embed-text`, `llama3`)
--   **GitHub Personal Access Token (PAT)**: `search_github_repositories`ツールを使用するために、`GITHUB_PAT`という名前の環境変数を設定する必要があります。
+-   ローカルで実行されている [Ollama](https://ollama.com/) と、必要なモデル (`nomic-embed-text`, `llama3`、または自身で指定したモデル)
 
 ### 実行手順
 
@@ -28,7 +27,18 @@
     cd <repository_directory>
     ```
 
-2.  **Dockerコンテナをビルドして起動します。**
+2.  **環境変数を設定します。**
+    プロジェクトのルートに`.env`という名前のファイルを作成し、以下の内容を記述します。
+    ```dotenv
+    # GitHubリポジトリ検索ツールを使用する場合に設定
+    GITHUB_PAT=your_github_personal_access_token_here
+
+    # Ollamaモデル名を変更する場合（オプション）
+    # OLLAMA_CHAT_MODEL=llama3
+    # OLLAMA_EMBED_MODEL=nomic-embed-text
+    ```
+
+3.  **Dockerコンテナをビルドして起動します。**
     このコマンドにより、`backend`, `frontend`, `chroma`, `playwright` の4つのサービスが起動します。
     ```bash
     sudo docker compose build
