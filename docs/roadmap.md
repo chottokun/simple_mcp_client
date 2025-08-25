@@ -82,7 +82,15 @@ LLMが回答を生成する過程をリアルタイムでUIに表示し、ユー
 -   `/api/chat`リクエストで受け取った`history`を、LangChainエージェントの入力（`chat_history`キーなど）として渡すように変更します。
 -   エージェントのプロンプトを更新し、会話履歴を考慮して応答するように指示します。
 
-### 2.5. LangGraphへの移行検討 (Consideration of Migrating to LangGraph)
+### 2.5. 外部ツール連携の強化 (Enhanced External Tool Integration)
+
+**目的**:
+エージェントが利用できるツールを増やし、回答能力を向上させます。
+
+**計画**:
+-   **Microsoft Learn MCPサーバーの完全な統合**: 現在`microsoft_docs_search`ツールは、実際のAPI応答形式を模した、高品質なプレースホルダーとして実装されています。これにより、将来的な統合の見通しが非常に明確になっています。公式のPython向けMCPクライアントライブラリが利用可能になるか、リクエストの仕様が明確になった時点で、`app/agent.py`内のコメントアウトされている部分を実際のAPI呼び出しに置き換えることで、完全な機能を有効化します。
+
+### 2.6. LangGraphへの移行検討 (Consideration of Migrating to LangGraph)
 
 **目的**:
 ツール呼び出しが複数回に及ぶ、あるいはユーザーの意図に応じて処理フローを分岐させるなど、より複雑なエージェントを構築する必要が出てきた場合に対応します。

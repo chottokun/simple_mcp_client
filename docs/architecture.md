@@ -56,7 +56,10 @@ graph TD
 ### Backend
 -   **FastAPI: Chat API (`app/main.py`)**: ユーザーからのリクエストを受け付けるメインのAPIサーバーです。非同期処理に強く、高いパフォーマンスが求められるためFastAPIが採用されました。`/api/chat`エンドポイントを提供し、LangChainエージェントの呼び出しをオーケストレーションします。
 -   **FastAPI: Tool Server (`app/tool_router.py`, `fastapi-mcp`)**: LangChainエージェントが使用する「ツール」をAPIとして提供します。`/tools/ingest`や`/tools/search`といったエンドポイントを定義し、`fastapi-mcp`ライブラリによって、これらのエンドポイントがLLMエージェントから呼び出し可能な形式に変換されます。
--   **LangChain Agent (`app/agent.py`)**: システムの頭脳です。ユーザーの質問を解釈し、どのツールを（どの引数で）使用すべきかを判断します。ツールから得られた情報を基に、最終的な回答を生成するためのプロンプトを組み立て、LLMに送信します。本プロジェクトでは、思考と行動の連鎖を管理しやすい**ReAct (Reasoning and Acting)** タイプのエージェントを採用しています。
+-   **LangChain Agent (`app/agent.py`)**: システムの頭脳です。ユーザーの質問を解釈し、どのツールを使用すべきかを判断します。本プロジェクトでは、以下の2つのツールを持っています。
+    -   `local_document_search`: 社内ドキュメントを検索します。
+    -   `microsoft_docs_search`: Microsoft Learnの公式ドキュメントを検索します（現在は、実際のAPI応答を模した、高品質なプレースホルダー実装となっています）。
+    エージェントはツールから得られた情報を基に、最終的な回答を生成するためのプロンプトを組み立て、LLMに送信します。思考と行動の連鎖を管理しやすい**ReAct (Reasoning and Acting)** タイプのエージェントを採用しています。
 -   **CLI (`cli.py`)**: 管理者がドキュメントを取り込むためのコマンドラインインターフェースです。`markitdown`ライブラリを利用して様々なファイル形式をテキストに変換し、`/tools/ingest` APIを呼び出すことで、手動でのAPI操作を簡略化します。
 
 ### Data & AI Services
