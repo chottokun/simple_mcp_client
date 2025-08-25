@@ -1,37 +1,25 @@
 # インテリジェントRAGチャットシステム (Intelligent RAG Chat System)
 
-## 1. 概要 (Overview)
+## 概要 (Overview)
 
 このプロジェクトは、社内に散在するドキュメント（規定、議事録、マニュアル等）を効率的に検索・活用するためのRAG (Retrieval-Augmented Generation) チャットシステムです。従業員は自然言語で質問するだけで、関連ドキュメントに基づいた正確な回答を迅速に得ることができます。
 
-## 2. 技術スタック (Tech Stack)
+より詳細な情報については、`docs/`ディレクトリ内のドキュメントを参照してください。
 
-| レイヤー                | 技術                 | 役割                                         |
-| ----------------------- | -------------------- | -------------------------------------------- |
-| **Frontend**            | Streamlit            | 迅速なUIプロトタイピングと実装               |
-| **Backend**             | FastAPI              | 非同期処理に対応した高速なAPIサーバー        |
-| **LLM Agent Framework** | LangChain            | LLM、ツール、プロンプトを統合し、Agentを構築 |
-| **Tool Server**         | FastApiMCP           | FastAPIエンドポイントをLLM用ツールとして公開 |
-| **Vector Store**        | ChromaDB             | ドキュメントのベクトル化と類似度検索         |
-| **LLM**                 | Ollama (nomic-embed-text, llama3) | 埋め込み生成と自然言語応答生成             |
-| **Container**           | Docker, Docker Compose | 開発・本番環境の再現性とポータビリティ     |
-| **Code Quality**        | Ruff, Pytest         | リンティング、フォーマット、単体テスト       |
+-   **[はじめに (Introduction)](./docs/introduction.md)**: プロジェクトの目的、解決する課題、主な機能について。
+-   **[アーキテクチャ (Architecture)](./docs/architecture.md)**: システムの技術的な構造と設計について。
+-   **[開発者ガイド (Developer Guide)](./docs/development.md)**: 開発環境のセットアップ、テスト、コード品質について。
+-   **[利用者ガイド (Usage Guide)](./docs/usage.md)**: チャットUIとドキュメント取り込み用CLIツールの使い方について。
+-   **[ロードマップ (Roadmap)](./docs/roadmap.md)**: 今後のテスト戦略と機能拡張計画について。
 
-## 3. セットアップと実行 (Setup & Execution)
+## クイックスタート (Quick Start)
 
-### 前提条件 (Prerequisites)
+### 前提条件
 
--   [Docker](https://www.docker.com/get-started) と [Docker Compose](https://docs.docker.com/compose/install/) がインストールされていること。
--   Ollamaがローカルで実行されており、必要なモデルがプルされていること。
-    ```bash
-    # For embeddings
-    ollama pull nomic-embed-text
+-   [Docker](https://www.docker.com/get-started) と [Docker Compose](https://docs.docker.com/compose/install/)
+-   ローカルで実行されている [Ollama](https://ollama.com/) と、必要なモデル (`nomic-embed-text`, `llama3`)
 
-    # For chat generation
-    ollama pull llama3
-    ```
-
-### 実行手順 (Running the Application)
+### 実行手順
 
 1.  **リポジトリをクローンします。**
     ```bash
@@ -49,67 +37,17 @@
     -   **チャットUI (Frontend)**: [http://localhost:8501](http://localhost:8501)
     -   **APIドキュメント (Backend)**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-4.  **コンテナを停止します。**
+4.  **ドキュメントの取り込み (Ingestion)**:
+    `cli.py`ツールを使用してドキュメントを取り込みます。（詳細は[利用者ガイド](./docs/usage.md)を参照）
+    ```bash
+    # 依存関係のインストール (初回のみ)
+    pip install -r requirements.txt
+
+    # CLIツールの実行
+    python cli.py ingest /path/to/your/document.pdf
+    ```
+
+5.  **コンテナを停止します。**
     ```bash
     sudo docker compose down
-    ```
-
-## 4. CLIツール (CLI Tool)
-
-このプロジェクトには、ドキュメントを簡単取り込むためのCLIツールが含まれています。
-
-### セットアップ (Setup)
-
-CLIツールは、バックエンドと同じ依存関係（`markitdown`を含む）を使用します。以下のコマンドで依存関係をインストールしてください。
-
-```bash
-pip install -r requirements.txt
-```
-
-### 使用方法 (Usage)
-
-`ingest`コマンドを使用して、ローカルのファイルをシステムに取り込みます。このツールは、PDF、Word、Markdownなど、さまざまなファイル形式に対応しています。
-
-```bash
-python cli.py ingest /path/to/your/document.pdf
-```
-
-成功すると、サーバーからの成功メッセージが表示されます。
-
-## 5. APIエンドポイント
-
-### `/api/chat`
-
--   **Method**: `POST`
--   **役割**: ユーザーからのチャットメッセージを受け取り、LLMエージェントからの応答を返します。
--   **Request Body**:
-    ```json
-    {
-      "message": "string",
-      "session_id": "string"
-    }
-    ```
--   **Response Body**:
-    ```json
-    {
-      "answer": "string",
-      "sources": [
-        {
-          "document_name": "string",
-          "snippet": "string"
-        }
-      ]
-    }
-    ```
-
-### `/tools/ingest`
-
--   **Method**: `POST`
--   **役割**: ドキュメントをベクトルストアに取り込みます。
--   **Request Body**:
-    ```json
-    {
-      "file_content": "string",
-      "file_name": "string"
-    }
     ```
