@@ -29,6 +29,7 @@
     ```
 
 2.  **Dockerコンテナをビルドして起動します。**
+    このコマンドにより、`backend`, `frontend`, `chroma`, `playwright` の4つのサービスが起動します。
     ```bash
     sudo docker compose build
     sudo docker compose up -d

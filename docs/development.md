@@ -32,7 +32,7 @@
     ```
 
 4.  **コンテナの起動**:
-    すべてのサービスをバックグラウンドで起動します。
+    すべてのサービス（`backend`, `frontend`, `chroma`, `playwright`）をバックグラウンドで起動します。
     ```bash
     sudo docker compose up -d
     ```
