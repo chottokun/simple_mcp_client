@@ -1,10 +1,11 @@
-import requests
 import json
 import os
+import requests
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_community.llms import Ollama
 from langchain.prompts import PromptTemplate
 from langchain.tools import Tool
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 # --- Configuration ---
 LOCAL_TOOL_SERVER_URL = "http://backend:8000/tools"
@@ -17,94 +18,83 @@ GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 def local_document_search(query: str) -> str:
     """
     Searches the company's internal documents.
+    This tool remains a standard REST call, not an MCP tool.
     """
-    # (Implementation is unchanged)
     try:
         response = requests.post(f"{LOCAL_TOOL_SERVER_URL}/search", json={"query": query})
         response.raise_for_status()
+        # The search result is already in the desired JSON format with 'content_for_llm' and 'sources'
         return response.json().get("results", "No results found.")
     except requests.exceptions.RequestException as e:
         return f"Error calling local search API: {e}"
 
-def search_github_repositories(query: str) -> str:
-    """
-    Searches for repositories on GitHub using the official GitHub MCP server.
-    """
-    # (Implementation is unchanged)
-    github_token = os.getenv("GITHUB_PAT")
-    if not github_token:
-        return json.dumps({"error": "GITHUB_PAT environment variable not set.", "sources": []})
-    try:
-        payload = {"tool": "search_repositories", "input": {"query": query}}
-        headers = {"Authorization": f"Bearer {github_token}"}
-        response = requests.post(GITHUB_MCP_URL, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
-        raw_results = response.json()
-        if not raw_results:
-            return json.dumps({"content_for_llm": "No repositories found.", "sources": []})
-        sources_list = [{"document_name": r.get('html_url', '#'), "snippet": r.get('description', '')} for r in raw_results[:5]]
-        content_list = [f"Repo: {r.get('full_name', 'N/A')}\nURL: {r.get('html_url', '#')}\nDescription: {r.get('description', '')}" for r in raw_results[:5]]
-        return json.dumps({"content_for_llm": "\n---\n".join(content_list), "sources": sources_list})
-    except Exception as e:
-        return json.dumps({"error": f"Error calling GitHub API: {e}", "sources": []})
+# --- MCP Client Setup ---
 
-def browse_website(url: str) -> str:
+def get_mcp_client() -> MultiServerMCPClient:
     """
-    Navigates to a URL and returns a snapshot of its content.
-    This tool calls the Playwright MCP server.
+    Creates and configures the MultiServerMCPClient to connect to external tool servers.
     """
-    # This tool is a placeholder and does not make a live call.
-    # It demonstrates how one would call the service and what the response looks like.
-    print(f"--- MOCK TOOL CALL: browse_website(url='{url}') ---")
+    github_pat = os.getenv("GITHUB_PAT")
+    if not github_pat:
+        print("Warning: GITHUB_PAT environment variable not set. GitHub tool will not be available.")
+        # Return a client without the GitHub server if the PAT is missing
+        return MultiServerMCPClient(
+            {
+                "playwright": {
+                    "transport": "streamable_http",
+                    "url": PLAYWRIGHT_MCP_URL,
+                }
+            }
+        )
 
-    # In a real implementation, you would make two calls:
-    # 1. Call the 'browser_navigate' tool.
-    # 2. Call the 'browser_snapshot' tool.
-    # This requires a proper MCP client to manage sessions.
-    # For this example, we return a hardcoded snapshot.
+    client = MultiServerMCPClient(
+        {
+            "github": {
+                "transport": "streamable_http",
+                "url": GITHUB_MCP_URL,
+                "headers": {"Authorization": f"Bearer {github_pat}"},
+            },
+            "playwright": {
+                "transport": "streamable_http",
+                "url": PLAYWRIGHT_MCP_URL,
+            },
+        }
+    )
+    return client
 
-    placeholder_snapshot = {
-        "role": "document",
-        "content": [
-            {"role": "heading", "level": 1, "text": "Welcome to Example Corp"},
-            {"role": "paragraph", "text": "Example Corp is a leading provider of innovative solutions."},
-            {"role": "link", "text": "Learn More", "href": "/about"}
-        ]
-    }
+mcp_client = get_mcp_client()
 
-    # Format the snapshot for the LLM
-    content_list = [f"{item['role']}: {item['text']}" for item in placeholder_snapshot['content']]
-    formatted_content = "\n".join(content_list)
+# --- Tool Loading ---
 
-    return json.dumps({
-        "content_for_llm": f"Snapshot of {url}:\n{formatted_content}",
-        "sources": [{"document_name": url, "snippet": formatted_content}]
-    })
-
-def get_tools():
+async def get_tools() -> list[Tool]:
     """
-    Initializes all tools for the agent.
+    Initializes all tools for the agent, including local tools and tools from MCP servers.
     """
+    # 1. Define the local tool
     local_search_tool = Tool(
         name="local_document_search",
         func=local_document_search,
         description="Searches the company's internal documents (manuals, specs, reports). Use this for questions about internal projects, policies, and procedures."
     )
-    github_tool = Tool(
-        name="search_github_repositories",
-        func=search_github_repositories,
-        description="Searches for public repositories on GitHub. Use this to find code, projects, or libraries related to a specific topic."
-    )
-    browse_tool = Tool(
-        name="browse_website",
-        func=browse_website,
-        description="Fetches the content of a given URL. Use this to answer questions that require information from a specific website."
-    )
-    return [local_search_tool, github_tool, browse_tool]
 
-def create_agent_executor():
+    # 2. Load tools from all configured MCP servers
+    try:
+        mcp_tools = await mcp_client.get_tools()
+        print(f"Successfully loaded {len(mcp_tools)} tools from MCP servers.")
+    except Exception as e:
+        print(f"Error loading MCP tools: {e}. Proceeding with local tools only.")
+        mcp_tools = []
+
+
+    # 3. Combine local and MCP tools
+    return [local_search_tool] + mcp_tools
+
+# --- Agent Creation ---
+
+async def create_agent_executor() -> AgentExecutor:
     """
     Creates the LangChain agent, including its prompt, LLM, and tools.
+    This is now an async function to accommodate async tool loading.
     """
     prompt_template = """
     You are a helpful assistant. You have access to a suite of tools to find information.
@@ -134,9 +124,11 @@ def create_agent_executor():
     Thought:{agent_scratchpad}
     """
     prompt = PromptTemplate.from_template(prompt_template)
-
     llm = Ollama(model="llama3")
-    tools = get_tools()
+
+    # Await the asynchronous get_tools function
+    tools = await get_tools()
+
     agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
 

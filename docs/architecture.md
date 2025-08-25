@@ -4,7 +4,7 @@
 
 ## 2.1. システム構成図
 
-システムは、主に「Frontend」「Backend」「Tool Services」の3つのレイヤーで構成されています。
+システムは、主に「Frontend」「Backend」「Tool Services」の3つのレイヤーで構成されています。`langchain-mcp-adapters`の導入により、外部ツールとの連携がより洗練されました。
 
 ```mermaid
 graph TD
@@ -15,10 +15,10 @@ graph TD
     subgraph "Backend Server (Docker)"
         B[FastAPI: Chat API]
         C[LangChain: Agent/Orchestrator]
+        MCP_Client[MultiServerMCPClient]
         D[FastAPI: Tool Server]
         E[Tool: ingest_document]
         F[Tool: search_data]
-        BR[Tool: browse_website]
     end
 
     subgraph "Tool Services (Docker / External)"
@@ -29,8 +29,9 @@ graph TD
     end
 
     A -- "1. /api/chat (HTTP)" --> B
-    B -- "2. invoke(question)" --> C
-    C -- "3. Decide which tool to use" --> D & BR & GH
+    B -- "2. ainvoke(question)" --> C
+
+    C -- "3. Decide which tool to use" --> D & MCP_Client
 
     subgraph "Internal Search Flow"
         D -- "Calls" --> F
@@ -40,14 +41,13 @@ graph TD
         D -- "observation" --> C
     end
 
-    subgraph "GitHub Search Flow"
-        C -- "Calls" --> GH
-        GH -- "observation" --> C
-    end
-
-    subgraph "Website Browsing Flow"
-        C -- "Calls" --> PW
-        PW -- "observation" --> C
+    subgraph "External MCP Tool Flow"
+        C -- "Calls" --> MCP_Client
+        MCP_Client -- "github" --> GH
+        MCP_Client -- "playwright" --> PW
+        GH -- "observation" --> MCP_Client
+        PW -- "observation" --> MCP_Client
+        MCP_Client -- "tool result" --> C
     end
 
     C -- "4. Generate final prompt" --> H
@@ -72,32 +72,29 @@ graph TD
 -   **Streamlit UI (`streamlit_app.py`)**: ユーザーが直接操作するWebインターフェースです。
 
 ### Backend
--   **FastAPI: Chat API (`app/main.py`)**: ユーザーからのリクエストを受け付けるメインのAPIサーバーです。
+-   **FastAPI: Chat API (`app/main.py`)**: ユーザーからのリクエストを受け付けるメインのAPIサーバーです。アプリケーションの起動時に`lifespan`イベントハンドラを用いて、非同期に`AgentExecutor`を初期化します。
 -   **FastAPI: Tool Server (`app/tool_router.py`)**: `local_document_search`ツールが使用する、`ingest`と`search`の内部APIエンドポイントを提供します。
--   **LangChain Agent (`app/agent.py`)**: システムの頭脳です。ユーザーの質問を解釈し、どのツールを使用すべきかを判断します。本プロジェクトでは、以下のツールを持っています。
-    -   `local_document_search`: 社内ドキュメントを検索します。
-    -   `search_github_repositories`: GitHubリポジトリを検索します。
-    -   `browse_website`: 指定されたURLのウェブページの内容を取得します（Playwrightを利用）。
+-   **LangChain Agent (`app/agent.py`)**: システムの頭脳です。ユーザーの質問を解釈し、どのツールを使用すべきかを判断します。
+-   **MultiServerMCPClient (`app/agent.py`)**: `langchain-mcp-adapters`ライブラリのクライアントです。`GitHub`や`Playwright`のような外部MCPサーバーへの接続を一元管理し、それらのサーバーが提供するツールを動的に読み込み、LangChainエージェントに提供します。
 -   **CLI (`cli.py`)**: 管理者がドキュメントを取り込むためのコマンドラインインターフェースです。
 
 ### Tool Services
 -   **Vector Store: ChromaDB**: 社内ドキュメントのベクトル検索用データベースです。
 -   **LLM Service: Ollama**: 埋め込み生成とチャット応答生成を担当します。
--   **Playwright MCP Server**: `browse_website`ツールからのリクエストを受け、実際のブラウザ操作を実行するサーバーです。`docker-compose`によってNode.js環境で実行されます。
--   **GitHub MCP Server**: `search_github_repositories`ツールが呼び出す、GitHub公式の外部MCPサーバーです。
+-   **Playwright MCP Server**: `browse_website`ツールなどを提供するブラウザ操作用のサーバーです。`docker-compose`によってNode.js環境で実行されます。
+-   **GitHub MCP Server**: `search_github_repositories`ツールなどを提供する、GitHub公式の外部MCPサーバーです。
 
 ## 2.3. データフロー解説
 
-基本的なチャットフローに加え、エージェントは質問内容に応じて異なるツールを呼び出します。
+エージェントは、質問内容に応じて異なるツールを呼び出します。
 
 -   **社内文書に関する質問の場合**: `local_document_search`ツールが`Tool Server`と`ChromaDB`を呼び出します。
--   **GitHubに関する質問の場合**: `search_github_repositories`ツールが外部の`GitHub MCP Server`を呼び出します。
--   **特定のウェブサイトに関する質問の場合**: `browse_website`ツールが`Playwright MCP Server`コンテナを呼び出します。
+-   **外部サービスに関する質問の場合**: エージェントは`MultiServerMCPClient`を通じて、適切な外部ツール（GitHubやPlaywright）を呼び出します。クライアントが各サーバーとの通信を抽象化するため、エージェントは統一されたインターフェースでツールを利用できます。
 
 エージェントは、これらのツールから得られた観測結果（Observation）を基に、最終的な回答を生成します。
 
 ## 2.4. 主要な設計判断
 
--   **マイクロサービス的なツール拡張**: `Playwright`のような異なる技術スタック（Node.js）で動作するツールも、Dockerコンテナとして追加し、サービス間通信を行うことで、Pythonベースのメインアプリケーションを汚染することなくシステム全体の機能を拡張できます。この疎結合なアプローチが、本システムの高い拡張性を支えています。
--   **依存性注入の活用**: `app/main.py`において、`agent_executor`をFastAPIの`Depends`を用いて注入しています。これにより、テスト容易性を大幅に向上させています。
+-   **MCPアダプタによる標準化**: `langchain-mcp-adapters`を導入することで、これまで手動で行っていた外部API（MCPサーバー）との通信を標準化・抽象化しました。これにより、コードの可読性と保守性が向上し、新しいMCPツールを簡単に追加できるようになりました。
+-   **非同期処理への移行**: エージェントの初期化やツールの非同期I/Oに対応するため、`app/main.py`ではFastAPIの`lifespan`イベントを、`app/agent.py`では`async/await`を全面的に採用しました。これにより、アプリケーションの起動や外部API呼び出しのパフォーマンスが向上します。
 -   **CLIによるIngestion**: ユーザーが直接APIを叩く負担を軽減するため、`markitdown`という強力なライブラリを活用したCLIツールを提供しました。

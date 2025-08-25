@@ -82,7 +82,18 @@
 
 コミット前には、必ず`ruff format`と`pytest`を実行してください。
 
-## 3.4. プロジェクト構造
+## 3.4. 主要ライブラリ (Key Libraries)
+
+本プロジェクトは、以下の主要なライブラリに依存しています。
+
+-   **FastAPI**: 高パフォーマンスなWeb APIフレームワーク。
+-   **LangChain**: LLMアプリケーションを構築するためのフレームワーク。エージェントやツール管理の根幹を担います。
+-   **langchain-mcp-adapters**: 外部のMCP(Model Context Protocol)ツールサーバーとの接続を容易にするためのアダプタライブラリ。
+-   **Streamlit**: フロントエンドのUIを構築するためのPythonライブラリ。
+-   **ChromaDB**: ドキュメントのベクトル検索に使用するVector Store。
+-   **Ollama**: ローカル環境でLLMを実行するためのツール。
+
+## 3.5. プロジェクト構造
 
 ```
 .

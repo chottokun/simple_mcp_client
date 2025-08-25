@@ -1,11 +1,11 @@
 import pytest
 import json
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 from app.main import app, get_agent_executor
 
-# Create a mock agent that we can control in our tests
-mock_agent = MagicMock()
+# Create an async mock agent that we can control in our tests
+mock_agent = AsyncMock()
 
 
 # This function will override the real get_agent_executor dependency
@@ -16,6 +16,8 @@ def override_get_agent_executor():
 # Apply the override to the FastAPI app for all tests in this file
 app.dependency_overrides[get_agent_executor] = override_get_agent_executor
 
+# The TestClient needs to be instantiated after the override is in place.
+# The lifespan function will run, but get_agent_executor will be our mock.
 client = TestClient(app)
 
 
@@ -38,7 +40,8 @@ def test_chat_endpoint_success():
             {"document_name": "reqs.md", "snippet": "The system must be a RAG system."}
         ],
     }
-    mock_agent.invoke.return_value = {"output": json.dumps(agent_output_dict)}
+    # The endpoint now uses 'ainvoke' and expects a JSON string in the 'output'
+    mock_agent.ainvoke.return_value = {"output": json.dumps(agent_output_dict)}
     request_body = {
         "message": "What are the project requirements?",
         "session_id": "test_1",
@@ -48,9 +51,9 @@ def test_chat_endpoint_success():
     response = client.post("/api/chat", json=request_body)
 
     # Assert
-    assert response.status_code == 200
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}. Response: {response.text}"
     assert response.json() == agent_output_dict
-    mock_agent.invoke.assert_called_once_with(
+    mock_agent.ainvoke.assert_called_once_with(
         {"input": "What are the project requirements?"}
     )
 
@@ -60,7 +63,8 @@ def test_chat_endpoint_invalid_json():
     Tests the /api/chat endpoint when the agent returns a non-JSON string.
     """
     # Arrange
-    mock_agent.invoke.return_value = {"output": "This is not JSON."}
+    # The endpoint now uses 'ainvoke'
+    mock_agent.ainvoke.return_value = {"output": "This is not JSON."}
     request_body = {"message": "A question", "session_id": "test_2"}
 
     # Act
@@ -76,7 +80,8 @@ def test_chat_endpoint_agent_error():
     Tests the /api/chat endpoint when the agent itself raises an exception.
     """
     # Arrange
-    mock_agent.invoke.side_effect = Exception("Agent failed to process.")
+    # The endpoint now uses 'ainvoke'
+    mock_agent.ainvoke.side_effect = Exception("Agent failed to process.")
     request_body = {
         "message": "A question that breaks the agent",
         "session_id": "test_3",
