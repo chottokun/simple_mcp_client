@@ -25,4 +25,5 @@ ruff
 pytest-mock
 
 # CLI Tools
+typer[all]
 markitdown

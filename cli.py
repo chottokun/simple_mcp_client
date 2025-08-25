@@ -13,9 +13,7 @@ app = typer.Typer(
 )
 
 @app.command()
-def ingest(
-    filepath: str = typer.Argument(..., help="The path to the document to ingest.")
-):
+def ingest(filepath: str):
     """
     Converts a document to Markdown text and ingests it into the RAG system via the API.
     """
@@ -56,6 +54,11 @@ def ingest(
     except Exception as e:
         typer.secho(f"An error occurred: {e}", fg=typer.colors.RED)
         raise typer.Exit(code=1)
+
+@app.command()
+def hello(name: str):
+    """A simple test command."""
+    typer.echo(f"Hello, {name}!")
 
 if __name__ == "__main__":
     app()

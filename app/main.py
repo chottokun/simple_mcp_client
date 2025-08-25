@@ -1,6 +1,5 @@
 import json
-import asyncio
-from contextlib import asynccontextmanager
+from functools import lru_cache
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Annotated
@@ -27,32 +26,11 @@ class ChatResponse(BaseModel):
     sources: List[Source]
 
 
-# --- Agent Lifecycle Management ---
-agent_executor_instance = None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Asynchronous context manager to create and clean up the agent executor.
-    The agent is created once when the application starts.
-    """
-    global agent_executor_instance
-    print("Application startup: Creating Agent Executor...")
-    # Since create_agent_executor is now async, we await it.
-    agent_executor_instance = await create_agent_executor()
-    print("Agent Executor created successfully.")
-    yield
-    # Clean up resources if needed on shutdown
-    print("Application shutdown.")
-    agent_executor_instance = None
-
-
 # --- FastAPI App Setup ---
 app = FastAPI(
     title="Intelligent RAG Chat System - API",
     description="API for the RAG chat system, including tool endpoints.",
     version="0.1.0",
-    lifespan=lifespan,
 )
 
 app.include_router(tool_router.router, prefix="/tools", tags=["Tools"])
@@ -62,12 +40,11 @@ mcp.mount()
 
 
 # --- Agent Dependency ---
+@lru_cache(maxsize=1)
 def get_agent_executor():
-    """Dependency to get the singleton agent executor instance."""
-    if agent_executor_instance is None:
-        # This should not happen if the lifespan event handler is working correctly
-        raise HTTPException(status_code=500, detail="Agent executor not initialized.")
-    return agent_executor_instance
+    """Dependency to get a singleton agent executor instance."""
+    print("--- Getting Agent Executor ---")
+    return create_agent_executor()
 
 
 # --- API Endpoints ---
@@ -86,7 +63,8 @@ async def chat_endpoint(
     and returns a structured answer with sources.
     """
     try:
-        # Use the asynchronous 'ainvoke' method for the agent
+        # Since the endpoint is async, we should use ainvoke to not block the event loop
+        # For AgentExecutor, this runs the synchronous 'invoke' in a thread pool.
         result = await agent_executor.ainvoke({"input": request.message})
         output_str = result.get("output", "{}")
 

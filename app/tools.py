@@ -2,14 +2,12 @@ import os
 import json
 import chromadb
 from chromadb import EmbeddingFunction, Documents, Embeddings
-from langchain_community.embeddings import OllamaEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from functools import lru_cache
 
-
 # --- Embedding Function Wrapper for ChromaDB ---
 class LangchainEmbeddingFunction(EmbeddingFunction):
-    def __init__(self, embedding_model):
+    def __init__(self, embedding_model: Embeddings):
         self._embedding_model = embedding_model
 
     def __call__(self, input: Documents) -> Embeddings:
@@ -23,16 +21,18 @@ def get_chroma_collection():
     Initializes and returns the ChromaDB collection.
     Uses lru_cache to ensure it's a singleton.
     """
+    print("--- Getting Chroma Collection ---")
+
     CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
     CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8001"))
-
     client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
 
-    # Using a local Ollama model for embeddings
-    embed_model_name = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
-    print(f"Using Ollama embedding model: {embed_model_name}")
-    ollama_embeddings = OllamaEmbeddings(model=embed_model_name)
-    embedding_function = LangchainEmbeddingFunction(ollama_embeddings)
+    # Import manager here to avoid circular dependencies at startup
+    from .llm_manager import llm_manager
+
+    # Get the embedding model from the central manager
+    embedding_model = llm_manager.get_embedding_model()
+    embedding_function = LangchainEmbeddingFunction(embedding_model)
 
     collection = client.get_or_create_collection(
         name="company_documents",

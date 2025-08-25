@@ -1,8 +1,8 @@
 import json
 import os
 import requests
+import asyncio
 from langchain.agents import AgentExecutor, create_react_agent
-from langchain_community.llms import Ollama
 from langchain.prompts import PromptTemplate
 from langchain.tools import Tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -23,7 +23,6 @@ def local_document_search(query: str) -> str:
     try:
         response = requests.post(f"{LOCAL_TOOL_SERVER_URL}/search", json={"query": query})
         response.raise_for_status()
-        # The search result is already in the desired JSON format with 'content_for_llm' and 'sources'
         return response.json().get("results", "No results found.")
     except requests.exceptions.RequestException as e:
         return f"Error calling local search API: {e}"
@@ -32,70 +31,46 @@ def local_document_search(query: str) -> str:
 
 def get_mcp_client() -> MultiServerMCPClient:
     """
-    Creates and configures the MultiServerMCPClient to connect to external tool servers.
+    Creates and configures the MultiServerMCPClient.
     """
     github_pat = os.getenv("GITHUB_PAT")
     if not github_pat:
         print("Warning: GITHUB_PAT environment variable not set. GitHub tool will not be available.")
-        # Return a client without the GitHub server if the PAT is missing
-        return MultiServerMCPClient(
-            {
-                "playwright": {
-                    "transport": "streamable_http",
-                    "url": PLAYWRIGHT_MCP_URL,
-                }
-            }
-        )
+        return MultiServerMCPClient({"playwright": {"transport": "streamable_http", "url": PLAYWRIGHT_MCP_URL}})
 
-    client = MultiServerMCPClient(
-        {
-            "github": {
-                "transport": "streamable_http",
-                "url": GITHUB_MCP_URL,
-                "headers": {"Authorization": f"Bearer {github_pat}"},
-            },
-            "playwright": {
-                "transport": "streamable_http",
-                "url": PLAYWRIGHT_MCP_URL,
-            },
-        }
-    )
-    return client
+    return MultiServerMCPClient({
+        "github": {"transport": "streamable_http", "url": GITHUB_MCP_URL, "headers": {"Authorization": f"Bearer {github_pat}"}},
+        "playwright": {"transport": "streamable_http", "url": PLAYWRIGHT_MCP_URL},
+    })
 
 mcp_client = get_mcp_client()
 
 # --- Tool Loading ---
 
-async def get_tools() -> list[Tool]:
+def get_tools() -> list[Tool]:
     """
-    Initializes all tools for the agent, including local tools and tools from MCP servers.
+    Initializes all tools for the agent. Synchronous wrapper for async call.
     """
-    # 1. Define the local tool
     local_search_tool = Tool(
         name="local_document_search",
         func=local_document_search,
-        description="Searches the company's internal documents (manuals, specs, reports). Use this for questions about internal projects, policies, and procedures."
+        description="Searches the company's internal documents (manuals, specs, reports)."
     )
-
-    # 2. Load tools from all configured MCP servers
     try:
-        mcp_tools = await mcp_client.get_tools()
+        mcp_tools = asyncio.run(mcp_client.get_tools())
         print(f"Successfully loaded {len(mcp_tools)} tools from MCP servers.")
     except Exception as e:
         print(f"Error loading MCP tools: {e}. Proceeding with local tools only.")
         mcp_tools = []
-
-
-    # 3. Combine local and MCP tools
     return [local_search_tool] + mcp_tools
 
 # --- Agent Creation ---
 
-async def create_agent_executor() -> AgentExecutor:
+def create_agent_executor() -> AgentExecutor:
     """
-    Creates the LangChain agent, including its prompt, LLM, and tools.
-    This is now an async function to accommodate async tool loading.
+    Creates the LangChain agent.
     """
+    print("--- Creating Agent Executor ---")
     prompt_template = """
     You are a helpful assistant. You have access to a suite of tools to find information.
     Decide which tool is most appropriate for the user's question. You can search internal documents, search GitHub, or browse a specific website.
@@ -125,13 +100,13 @@ async def create_agent_executor() -> AgentExecutor:
     """
     prompt = PromptTemplate.from_template(prompt_template)
 
-    # Get the model name from environment variable, with a default
-    chat_model_name = os.getenv("OLLAMA_CHAT_MODEL", "llama3")
-    print(f"Using Ollama chat model: {chat_model_name}")
-    llm = Ollama(model=chat_model_name)
+    # Import manager here to avoid circular dependencies at startup
+    from .llm_manager import llm_manager
 
-    # Await the asynchronous get_tools function
-    tools = await get_tools()
+    # Get the LLM from the central manager
+    llm = llm_manager.get_llm()
+
+    tools = get_tools()
 
     agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
