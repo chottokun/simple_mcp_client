@@ -18,6 +18,7 @@
 
 -   [Docker](https://www.docker.com/get-started) と [Docker Compose](https://docs.docker.com/compose/install/)
 -   ローカルで実行されている [Ollama](https://ollama.com/) と、必要なモデル (`nomic-embed-text`, `llama3`)
+-   **GitHub Personal Access Token (PAT)**: `search_github_repositories`ツールを使用するために、`GITHUB_PAT`という名前の環境変数を設定する必要があります。
 
 ### 実行手順
 

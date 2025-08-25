@@ -11,7 +11,14 @@
     -   ローカルで実行されている [Ollama](https://ollama.com/)
     -   リポジトリのクローン
 
-2.  **Ollamaモデルの準備**:
+2.  **環境変数の設定**:
+    `search_github_repositories`ツールを使用するには、GitHubの個人アクセストークン（PAT）が必要です。プロジェクトのルートに`.env`ファイルを作成し、以下のように記述してください。Docker Composeが自動で読み込みます。
+    ```
+    GITHUB_PAT=your_github_personal_access_token_here
+    ```
+    *注意: `.env`ファイルは`.gitignore`に含まれており、バージョン管理されません。*
+
+3.  **Ollamaモデルの準備**:
     開発には埋め込みモデルとチャットモデルが必要です。
     ```bash
     ollama pull nomic-embed-text

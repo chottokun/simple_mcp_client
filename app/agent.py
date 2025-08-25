@@ -1,5 +1,6 @@
 import requests
 import json
+import os
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_community.llms import Ollama
 from langchain.prompts import PromptTemplate
@@ -7,13 +8,13 @@ from langchain.tools import Tool
 
 # --- Configuration ---
 LOCAL_TOOL_SERVER_URL = "http://backend:8000/tools"
-MS_LEARN_MCP_URL = "https://learn.microsoft.com/api/mcp"
+GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 
 # --- Tool Implementations ---
 
 def local_document_search(query: str) -> str:
     """
-    Function that calls the backend's search tool endpoint for internal documents.
+    Searches the company's internal documents.
     """
     try:
         response = requests.post(
@@ -25,61 +26,54 @@ def local_document_search(query: str) -> str:
     except requests.exceptions.RequestException as e:
         return f"Error calling local search API: {e}"
 
-def microsoft_docs_search(query: str) -> str:
+def search_github_repositories(query: str) -> str:
     """
-    Searches the official Microsoft Learn documentation.
-    This function contains a commented-out real implementation and returns a realistic, hardcoded placeholder response.
+    Searches for repositories on GitHub using the official GitHub MCP server.
     """
-    # TODO: This is a placeholder implementation.
-    # The commented-out code below shows a best-guess for a real implementation.
-    # --- Start of Commented-Out Real Implementation ---
-    # try:
-    #     payload = {"tool": "microsoft_docs_search", "input": query}
-    #     headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    #     response = requests.post(MS_LEARN_MCP_URL, json=payload, headers=headers, timeout=30)
-    #     response.raise_for_status()
-    #     raw_results = response.json()
-    # except requests.exceptions.RequestException as e:
-    #     return json.dumps({"error": f"Error calling Microsoft Learn API: {e}", "sources": []})
-    # --- End of Commented-Out Real Implementation ---
+    github_token = os.getenv("GITHUB_PAT")
+    if not github_token:
+        return json.dumps({
+            "error": "GITHUB_PAT environment variable not set. Please set it to a valid GitHub Personal Access Token.",
+            "sources": []
+        })
 
-    # --- Start of Placeholder Response ---
-    # This is a realistic response structure based on the Zenn article.
-    print(f"--- MOCK TOOL CALL: microsoft_docs_search(query='{query}') ---")
-    raw_results = [
-      {
-        "title": "Troubleshoot Azure Backup failures caused by agent or extension issues",
-        "content": "## UserErrorGuestAgentStatusUnavailable - VM agent unable to communicate with Azure Backup\n**Error code**: UserErrorGuestAgentStatusUnavailable **Error message**: VM Agent unable to communicate with Azure Backup\nThe Azure VM agent might be stopped, outdated, in an inconsistent state, or not installed.",
-        "contentUrl": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-troubleshoot-vm-backup-fails-snapshot-timeout#step-by-step-guide-to-troubleshoot-backup-failures"
-      },
-      {
-        "title": "Troubleshoot Azure Windows VM Agent issues",
-        "content": "## Troubleshooting checklist\nFor any VM extension to be able to run, Azure VM Guest Agent must be installed and working successfully. If you see that Guest Agent is reported as **Not ready**, or if an extension is failing and returning an error message such as `VMAgentStatusCommunicationError`, follow these steps to begin troubleshooting Guest Agent.",
-        "contentUrl": "https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/windows-azure-guest-agent#troubleshooting-checklist"
-      }
-    ]
-    # --- End of Placeholder Response ---
+    try:
+        payload = {
+            "tool": "search_repositories",
+            "input": {"query": query}
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {github_token}"
+        }
+        response = requests.post(GITHUB_MCP_URL, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
 
-    # --- Standardized Formatting Logic ---
-    # This part transforms the raw API response into the standard format our agent expects.
-    if not raw_results:
-        return json.dumps({"content_for_llm": "No relevant documents found in Microsoft Learn.", "sources": []})
+        raw_results = response.json()
 
-    sources_list = []
-    content_list = []
-    for result in raw_results:
-        # The source name is the URL for this tool
-        source_name = result.get('contentUrl', 'Unknown URL')
-        snippet = result.get('content', '')
-        title = result.get('title', 'No Title')
+        if not raw_results:
+            return json.dumps({"content_for_llm": "No repositories found on GitHub for that query.", "sources": []})
 
-        sources_list.append({"document_name": source_name, "snippet": snippet})
-        content_list.append(f"Title: {title}\nURL: {source_name}\nContent: {snippet}")
+        sources_list = []
+        content_list = []
+        for result in raw_results[:5]: # Limit to top 5 results for brevity
+            repo_name = result.get('full_name', 'N/A')
+            description = result.get('description', 'No description.')
+            url = result.get('html_url', '#')
 
-    return json.dumps({
-        "content_for_llm": "\n\n---\n\n".join(content_list),
-        "sources": sources_list
-    })
+            sources_list.append({"document_name": repo_name, "snippet": description})
+            content_list.append(f"Repo: {repo_name}\nURL: {url}\nDescription: {description}")
+
+        return json.dumps({
+            "content_for_llm": "\n\n---\n\n".join(content_list),
+            "sources": sources_list
+        })
+
+    except requests.exceptions.RequestException as e:
+        return json.dumps({"error": f"Error calling GitHub API: {e}", "sources": []})
+    except Exception as e:
+        return json.dumps({"error": f"An unexpected error occurred: {e}", "sources": []})
 
 
 def get_tools():
@@ -89,14 +83,14 @@ def get_tools():
     local_search_tool = Tool(
         name="local_document_search",
         func=local_document_search,
-        description="Searches the company's internal documents (manuals, specs, reports) for information about a query. Use this for questions about internal projects, policies, and procedures."
+        description="Searches the company's internal documents (manuals, specs, reports). Use this for questions about internal projects, policies, and procedures."
     )
-    ms_learn_tool = Tool(
-        name="microsoft_docs_search",
-        func=microsoft_docs_search,
-        description="Searches the official Microsoft Learn documentation. Use this for technical questions about Microsoft products like Azure, .NET, C#, etc."
+    github_tool = Tool(
+        name="search_github_repositories",
+        func=search_github_repositories,
+        description="Searches for public repositories on GitHub. Use this to find code, projects, or libraries related to a specific topic."
     )
-    return [local_search_tool, ms_learn_tool]
+    return [local_search_tool, github_tool]
 
 def create_agent_executor():
     """
