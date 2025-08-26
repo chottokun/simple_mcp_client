@@ -6,60 +6,48 @@
 
 より詳細な情報については、`docs/`ディレクトリ内のドキュメントを参照してください。
 
--   **[はじめに (Introduction)](./docs/introduction.md)**: プロジェクトの目的、解決する課題、主な機能について。
 -   **[アーキテクチャ (Architecture)](./docs/architecture.md)**: システムの技術的な構造と設計について。
--   **[開発者ガイド (Developer Guide)](./docs/development.md)**: 開発環境のセットアップ、テスト、コード品質について。
--   **[利用者ガイド (Usage Guide)](./docs/usage.md)**: チャットUIとドキュメント取り込み用CLIツールの使い方について。
--   **[ロードマップ (Roadmap)](./docs/roadmap.md)**: 今後のテスト戦略と機能拡張計画について。
+-   **[開発者ガイド (Developer Guide)](./docs/development.md)**: 開発環境のセットアップや詳細な設定について。
 
 ## クイックスタート (Quick Start)
 
-### 前提条件
-
+### 1. 前提条件
 -   [Docker](https://www.docker.com/get-started) と [Docker Compose](https://docs.docker.com/compose/install/)
--   ローカルで実行されている [Ollama](https://ollama.com/) と、必要なモデル (`nomic-embed-text`, `llama3`、または自身で指定したモデル)
+-   ローカルで実行されている [Ollama](https://ollama.com/)
 
-### 実行手順
+### 2. 環境設定
+プロジェクトのルートに`.env`という名前のファイルを作成します。ほとんどの場合、空のままで動作しますが、必要に応じて設定を追加できます。
 
-1.  **リポジトリをクローンします。**
-    ```bash
-    git clone <repository_url>
-    cd <repository_directory>
-    ```
+```dotenv
+# GitHub検索ツールを利用する場合、ご自身のトークンをここに設定してください
+# GITHUB_PAT=your_github_personal_access_token_here
 
-2.  **環境変数を設定します。**
-    プロジェクトのルートに`.env`という名前のファイルを作成し、以下の内容を記述します。
-    ```dotenv
-    # GitHubリポジトリ検索ツールを使用する場合に設定
-    GITHUB_PAT=your_github_personal_access_token_here
+# Docker for Mac/Windows以外でOllamaを利用する場合、URLを調整してください
+# OLLAMA_BASE_URL=http://localhost:11434
+```
+*その他の設定可能な項目については、[開発者ガイド](./docs/development.md)を参照してください。*
 
-    # Ollamaモデル名を変更する場合（オプション）
-    # OLLAMA_CHAT_MODEL=llama3
-    # OLLAMA_EMBED_MODEL=nomic-embed-text
-    ```
+### 3. システムの起動
+```bash
+# Dockerコンテナをビルドし、バックグラウンドで起動します
+sudo docker compose up -d --build
+```
 
-3.  **Dockerコンテナをビルドして起動します。**
-    このコマンドにより、`backend`, `frontend`, `chroma`, `playwright` の4つのサービスが起動します。
-    ```bash
-    sudo docker compose build
-    sudo docker compose up -d
-    ```
+### 4. アプリケーションへのアクセス
+-   **チャットUI (Frontend)**: [http://localhost:8501](http://localhost:8501)
+-   **APIドキュメント (Backend)**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-3.  **アプリケーションへのアクセス:**
-    -   **チャットUI (Frontend)**: [http://localhost:8501](http://localhost:8501)
-    -   **APIドキュメント (Backend)**: [http://localhost:8000/docs](http://localhost:8000/docs)
+### 5. ドキュメントの取り込み
+`cli.py`ツールを使用して、検索対象のドキュメントをシステムに取り込みます。
+```bash
+# (初回のみ) 依存関係をインストール
+pip install -r requirements.txt
 
-4.  **ドキュメントの取り込み (Ingestion)**:
-    `cli.py`ツールを使用してドキュメントを取り込みます。（詳細は[利用者ガイド](./docs/usage.md)を参照）
-    ```bash
-    # 依存関係のインストール (初回のみ)
-    pip install -r requirements.txt
+# CLIツールを実行してドキュメントを取り込む
+python cli.py ingest /path/to/your/document.pdf
+```
 
-    # CLIツールの実行
-    python cli.py ingest /path/to/your/document.pdf
-    ```
-
-5.  **コンテナを停止します。**
-    ```bash
-    sudo docker compose down
-    ```
+### 6. システムの停止
+```bash
+sudo docker compose down
+```

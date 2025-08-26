@@ -2,141 +2,94 @@
 
 このドキュメントは、本プロジェクトの開発に参加する開発者向けのガイドです。
 
-## 3.1. 開発環境のセットアップ
+## 3.1. 主要な設計とコンセプト
+
+### 設定とLLMクライアントの一元管理
+
+本プロジェクトでは、設定とLLMクライアントの管理を、以下の2つのシングルトンクラスに集約しています。
+
+-   **`app.config.ConfigManager`**:
+    -   `.env`ファイルから環境変数を読み込み、アプリケーション全体に設定を一元的に提供します。
+    -   Ollamaのモデル名や外部サービスのAPIキーなど、すべての環境依存の設定はこのクラスを通じて取得します。
+
+-   **`app.llm_manager.LLMManager`**:
+    -   LLMおよび埋め込みモデルのクライアントを生成・管理します。
+    -   `ConfigManager`から設定を読み取り、実際のOllamaクライアントまたはテスト用のモックを適切に提供します。
+    -   アプリケーション内のどの部分からでも、`llm_manager.get_llm()`や`llm_manager.get_embedding_model()`を呼び出すことで、同一のクライアントインスタンスを取得できます。
+
+この設計により、設定の散在やクライアントの多重生成を防ぎ、テスト容易性を大幅に向上させています。
+
+## 3.2. 開発環境のセットアップ
 
 開発はDockerコンテナ内で行うことを強く推奨します。
 
-1.  **前提条件**:
-    -   [Docker](https://www.docker.com/get-started) と [Docker Compose](https://docs.docker.com/compose/install/)
-    -   ローカルで実行されている [Ollama](https://ollama.com/)
-    -   リポジトリのクローン
+### 1. 前提条件
+-   [Docker](https://www.docker.com/get-started) と [Docker Compose](https://docs.docker.com/compose/install/)
+-   ローカルで実行されている [Ollama](https://ollama.com/)
+-   リポジトリのクローン
 
-2.  **環境変数の設定**:
-    プロジェクトのルートに`.env`ファイルを作成し、必要な環境変数を設定します。Docker Composeが自動でこのファイルを読み込みます。
+### 2. 環境変数の設定 (`.env`ファイル)
+プロジェクトのルートに`.env`ファイルを作成し、必要な環境変数を設定します。
 
-    ```dotenv
-    # GitHubリポジトリ検索ツールを使用するための個人アクセストークン
-    GITHUB_PAT=your_github_personal_access_token_here
+```dotenv
+# GitHubリポジトリ検索ツールを使用するための個人アクセストークン
+GITHUB_PAT=your_github_personal_access_token_here
 
-    # Ollamaで使用するモデル名を指定（オプション）
-    # 指定しない場合、デフォルト値が使用されます
-    OLLAMA_CHAT_MODEL=llama3
-    OLLAMA_EMBED_MODEL=nomic-embed-text
-    ```
-    -   `GITHUB_PAT`: `search_github_repositories`ツールを使用する場合に必須です。
-    -   `OLLAMA_CHAT_MODEL`: チャット応答を生成するモデルです。デフォルトは`llama3`です。
-    -   `OLLAMA_EMBED_MODEL`: ドキュメントの埋め込みベクトルを生成するモデルです。デフォルトは`nomic-embed-text`です。
+# --- Ollamaの設定 (お使いの環境に合わせて変更) ---
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_CHAT_MODEL=llama3
+OLLAMA_EMBED_MODEL=nomic-embed-text
 
-    *注意: `.env`ファイルは`.gitignore`に含まれており、バージョン管理されません。*
+# --- テスト用の設定 ---
+# Ollamaへの実際の接続を行わず、モックを使用する場合はtrueに設定
+# MOCK_OLLAMA=true
+```
+-   `GITHUB_PAT`: GitHub検索ツールを利用する場合に必須です。
+-   `OLLAMA_BASE_URL`: OllamaサーバーのURL。Docker for Mac/Windowsでは`host.docker.internal`がホストマシンを指します。
+-   `OLLAMA_CHAT_MODEL`: チャット応答用のモデル。
+-   `OLLAMA_EMBED_MODEL`: 埋め込みベクトル生成用のモデル。
+-   `MOCK_OLLAMA`: `true`に設定すると、Ollamaに接続せず、`LLMManager`が提供するモックオブジェクトを使用します。これにより、オフライン環境での開発やテストが可能になります。
 
-3.  **Ollamaモデルの準備**:
-    開発には埋め込みモデルとチャットモデルが必要です。
-    ```bash
-    ollama pull nomic-embed-text
-    ollama pull llama3
-    ```
+### 3. コンテナのビルドと起動
+```bash
+# イメージをビルドし、コンテナをバックグラウンドで起動します
+sudo docker compose up -d --build
+```
+-   フロントエンド: `http://localhost:8501`
+-   バックエンドAPI: `http://localhost:8000`
 
-3.  **Dockerコンテナのビルド**:
-    プロジェクトルートで以下のコマンドを実行し、`backend`と`frontend`のイメージをビルドします。
-    ```bash
-    sudo docker compose build
-    ```
-
-4.  **コンテナの起動**:
-    すべてのサービス（`backend`, `frontend`, `chroma`, `playwright`）をバックグラウンドで起動します。
-    ```bash
-    sudo docker compose up -d
-    ```
-    -   フロントエンド: `http://localhost:8501`
-    -   バックエンドAPI: `http://localhost:8000`
-
-5.  **リアルタイムログの確認**:
-    各サービスのログを確認するには、以下のコマンドを使用します。
-    ```bash
-    # バックエンドのログ
-    sudo docker compose logs -f backend
-
-    # フロントエンドのログ
-    sudo docker compose logs -f frontend
-    ```
-
-## 3.2. テスト (Testing)
-
-本プロジェクトでは`pytest`を使用した単体テストが導入されています。
+## 3.3. テストとコード品質
 
 -   **テストの実行**:
-    すべてのテストを実行するには、プロジェクトルートで以下のコマンドを実行します。`PYTHONPATH`を設定することで、`app`モジュールを正しくインポートできます。
     ```bash
+    # コンテナ内でテストを実行する場合
+    sudo docker compose exec backend pytest
+
+    # ローカルで実行する場合
     PYTHONPATH=. pytest
     ```
 
--   **テストの場所**:
-    テストコードはすべて`tests/`ディレクトリに配置されています。
-    -   `tests/test_tools.py`: データ層のツール（`ingest_document`, `search_data`）のロジックをテストします。
-    -   `tests/test_main.py`: FastAPIのエンドポイント（`/api/chat`）の動作をテストします。
-
-## 3.3. コード品質 (Code Quality)
-
-コードの品質と一貫性を保つために`Ruff`を使用しています。
-
--   **フォーマット**:
-    コードを整形するには、以下のコマンドを実行します。
+-   **コード品質**:
+    コミット前には`ruff`によるフォーマットとチェックを実行してください。
     ```bash
+    # フォーマット
     ruff format .
-    ```
 
--   **リンティングと自動修正**:
-    静的解析と簡単な問題の自動修正を行うには、以下のコマンドを実行します。
-    ```bash
+    # リンティングと自動修正
     ruff check . --fix
     ```
 
-コミット前には、必ず`ruff format`と`pytest`を実行してください。
-
-## 3.4. 主要ライブラリ (Key Libraries)
-
-本プロジェクトは、以下の主要なライブラリに依存しています。
-
--   **FastAPI**: 高パフォーマンスなWeb APIフレームワーク。
--   **LangChain**: LLMアプリケーションを構築するためのフレームワーク。エージェントやツール管理の根幹を担います。
--   **langchain-mcp-adapters**: 外部のMCP(Model Context Protocol)ツールサーバーとの接続を容易にするためのアダプタライブラリ。
--   **Streamlit**: フロントエンドのUIを構築するためのPythonライブラリ。
--   **ChromaDB**: ドキュメントのベクトル検索に使用するVector Store。
--   **Ollama**: ローカル環境でLLMを実行するためのツール。
-
-## 3.5. プロジェクト構造
+## 3.4. プロジェクト構造
 
 ```
 .
-├── app/                  # FastAPIバックエンドのソースコード
+├── app/
 │   ├── __init__.py
 │   ├── agent.py          # LangChainエージェントの定義
+│   ├── config.py         # ★ ConfigManager
+│   ├── llm_manager.py    # ★ LLMManager
 │   ├── main.py           # FastAPIアプリケーションのメインファイル
 │   ├── tool_router.py    # ツールのAPIエンドポイント定義
-│   └── tools.py          # ツールのコアロジック（ChromaDBとの連携など）
-│
-├── data/                 # （ローカルテスト用）サンプルドキュメント
-│   └── test_document.txt
-│
-├── docs/                 # プロジェクトドキュメント
-│   ├── introduction.md   # プロジェクト概要
-│   ├── architecture.md   # アーキテクチャ設計
-│   ├── development.md    # 開発者ガイド
-│   ├── usage.md          # ユーザーガイド
-│   └── roadmap.md        # 将来計画
-│
-├── tests/                # テストコード
-│   ├── test_main.py
-│   └── test_tools.py
-│
-├── .gitignore
-├── Agents.md             # (開発エージェント向け指示書)
-├── cli.py                # ドキュメント取り込み用CLIツール
-├── Dockerfile            # バックエンド用Dockerfile
-├── Dockerfile.streamlit  # フロントエンド用Dockerfile
-├── README.md             # プロジェクトの入り口
-├── requirements.txt      # バックエンドとCLIの依存関係
-├── requirements.streamlit.txt # フロントエンドの依存関係
-├── status.md             # (開発エージェント向け進捗管理ファイル)
-└── docker-compose.yml    # Docker Compose設定ファイル
+│   └── tools.py          # ツールのコアロジック
+...
 ```
